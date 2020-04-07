@@ -1,0 +1,160 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger: none
+
+parameters:
+  - name: Repo1_ADF_BuildArtifacts_TagNameOrBuildNumber
+    type: string
+    default: 'Repo1_ADFPublish5'
+    values:
+      - 'Repo1_ADFPublish1'
+      - 'Repo1_ADFPublish2'
+      - 'Repo1_ADFPublish3'
+      - 'Repo1_ADFPublish4'
+      - 'Repo1_ADFPublish5'
+  - name: Repo2_IAC_BuildArtifacts_TagNameOrBuildNumber
+    type: string
+    default: 'Repo2_IACARMRepo_Publish2'
+    values:
+      - 'Repo2_IACARMRepo_Publish1'
+      - 'Repo2_IACARMRepo_Publish2'
+  - name: RunTest1
+    type: string
+    default: 'true' 
+    values:
+      - 'true'
+      - 'false'
+  - name: RunTest2
+    type: boolean
+    default: true
+  - name: RunTest3
+    type: boolean
+    default: false
+  - name: blank_data_warehouse
+    type: string
+    default: 'no'
+    values:
+      - 'yes'
+      - 'no'
+  - name: azureSubDetails
+    displayName: 'Connected Azure Subscription Name'
+    type: string
+    default: 'Azure Subscription (123)' #replace with your service connection
+    values:
+      - 'Azure Subscription (123)'
+
+# from: https://docs.microsoft.com/en-us/azure/devops/pipelines/process/expressions?view=azure-devops
+# Two examples of expressions used to define variables
+# The first one, a, is evaluated when the YAML file is parsed into a plan.
+# The second one, b, is evaluated at run time. 
+# Note the syntax ${{}} for parse time and $[] for runtime expressions.
+variables:
+  - name: BuildName
+    value: $(Date:yyyyMMdd)_$(BuildID)
+    readonly: true
+  - name: vmImage
+    value: 'windows-latest'
+  - name: a
+    value: ${{ true }} # case insensitive, so true, True or TRUE all work. this is evaluated at parse time
+  - name: b
+    value: $[counter(variables['build.reason'], 0)] # this would evaluate any <expression> at runtime
+  
+name: $(BuildName)
+
+stages:
+  # this step will download build artifacts from a specific repository & branch, looking for latest for a specific tag. This could be used to pull the build artifacts from across different repositories.
+  # - stage: "Download Build Artifacts"
+  #   task: DownloadBuildArtifacts@0
+  #     inputs:
+  #       buildType: 'specific'
+  #       project: 'GUID'
+  #       pipeline: '1'
+  #       specificBuildWithTriggering: true
+  #       buildVersionToDownload: 'latestFromBranch' #latest from specific branch with specified tag
+  #       branchName: 'refs/heads/master'
+  #       tags: '$(Repo2_IAC_BuildArtifacts_TagNameOrBuildNumber)'
+  #       downloadType: 'specific'
+  #       downloadPath: '$(System.ArtifactsDirectory)'
+  - stage: "RunPowershell_toPrintVariablesAndParameters"
+    jobs: 
+    - deployment: 'test0_0'
+      pool:
+        vmImage: '$(vmImage)'
+      environment: 'none'
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+              - task: AzureKeyVault@1
+                inputs:
+                  azureSubscription: '${{ parameters.azureSubDetails }}'
+                  KeyVaultName: 'testAKV'
+                  SecretsFilter: 'PipelineTestSecret,PipelineTestConnStr'
+              - task: AzurePowerShell@5
+                inputs:
+                  azureSubscription: '${{ parameters.azureSubDetails }}'
+                  ScriptType: 'InlineScript'
+                  Inline: |
+                    echo "Repo1_ADF_BuildArtifacts_TagNameOrBuildNumber: ${{ parameters.Repo1_ADF_BuildArtifacts_TagNameOrBuildNumber }}"
+                    echo "Repo2_IAC_BuildArtifacts_TagNameOrBuildNumber: ${{ parameters.Repo2_IAC_BuildArtifacts_TagNameOrBuildNumber }}"
+                    echo "RunTest1: ${{ parameters.RunTest1 }}"
+                    echo "RunTest2: ${{ parameters.RunTest2 }}"
+                    echo "RunTest3: ${{ parameters.RunTest3 }}"
+                    echo "vmImage: $(vmImage)"
+                    echo "blank_data_warehouse: ${{ parameters.blank_data_warehouse }}"
+                    echo "azureSubDetails: ${{ parameters.azureSubDetails }}"
+                    echo "PipelineTestSecret: $(PipelineTestSecret)"
+                    echo "PipelineTestConnStr: $(PipelineTestConnStr)"
+                    echo "a: $(a)"
+                    echo "b: $(b)"
+                    echo "============================================"
+                    if ('${{ parameters.blank_data_warehouse }}' -eq 'no') {
+                        echo "This is a no"
+                    }
+                  errorActionPreference: 'continue'
+                  azurePowerShellVersion: 'LatestVersion'
+
+  # - stage: "Run_Test_1"
+  #   dependsOn: ""
+  # - ${{ if eq(parameters.RunTest1, true) }}:
+  - template: stages/child-template.yml
+    parameters:
+      Stage: 'Run_Test_1'
+      DependsOn: 'RunPowershell_toPrintVariablesAndParameters'
+      RunTest: '${{ parameters.RunTest1 }}'
+      environment: 'dev'
+      deploymentNum: '1'
+      vmImage: '$(vmImage)'
+      blank_data_warehouse: '${{ parameters.blank_data_warehouse }}'
+      azureSubName: '${{ parameters.azureSubDetails }}'
+
+  # - stage: "Run_Test_2"
+  #   dependsOn: "Run_Test_1"
+  # - ${{ if eq(parameters.RunTest2, true) }}:
+  - template: stages/child-template.yml
+    parameters:
+      Stage: 'Run_Test_2'
+      DependsOn: 'Run_Test_1'
+      RunTest: ${{ parameters.RunTest2 }}
+      environment: 'sit'
+      deploymentNum: '2'
+      vmImage: '$(vmImage)'
+      blank_data_warehouse: '${{ parameters.blank_data_warehouse }}'
+      azureSubName: '${{ parameters.azureSubDetails }}'
+
+  # - stage: "Run_Test_3"
+  #   dependsOn: "Run_Test_2"
+  # - ${{ if eq(parameters.RunTest3, true) }}:
+  - template: stages/child-template.yml
+    parameters:
+      Stage: 'Run_Test_3'
+      DependsOn: 'Run_Test_2'
+      RunTest: ${{ parameters.RunTest3 }}
+      environment: 'uat'
+      deploymentNum: '3'
+      vmImage: '$(vmImage)'
+      blank_data_warehouse: '${{ parameters.blank_data_warehouse }}'
+      azureSubName: '${{ parameters.azureSubDetails }}'

@@ -1,0 +1,66 @@
+parameters:
+  Stage: ''
+  DependsOn: ''
+  RunTest: ''
+  #buildVersion: ''
+  environment: ''
+  deploymentNum: ''
+  # subscriptionName: ''
+  vmImage: ''
+  blank_data_warehouse: ''
+  azureSubName: ''
+
+stages:
+  - stage: '${{ parameters.Stage }}'
+
+    dependsOn: '${{ parameters.DependsOn }}'
+
+    condition: and(eq('${{ parameters.blank_data_warehouse }}', 'no'), eq('${{ parameters.RunTest }}', true))
+
+    jobs: 
+    - deployment: 'job1_deploy_${{ parameters.deploymentNum }}'
+      dependsOn: ''
+      pool:
+        vmImage: ${{ parameters.vmImage }}
+      environment: ${{ parameters.environment }}_restore_dwh
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+            - task: AzurePowerShell@5
+              inputs:
+                azureSubscription: '${{ parameters.azureSubName }}'
+                ScriptType: 'InlineScript'
+                Inline: |
+                  echo "RunTest: ${{ parameters.RunTest }}"
+                  echo "environment: ${{ parameters.environment }}"
+                  echo "deploymentNum: ${{ parameters.deploymentNum }}"
+                  echo "vmImage: ${{ parameters.vmImage }}"
+                  echo "blank_data_warehouse: ${{ parameters.blank_data_warehouse }}"
+                  echo "============================================"
+                  if ('${{ parameters.blank_data_warehouse }}' -eq 'no') {
+                      echo "Blank_DW? This is a no"
+                  }
+                azurePowerShellVersion: 'LatestVersion'
+    - deployment: 'job2_deploy_${{ parameters.deploymentNum }}'
+      dependsOn: 'job1_deploy_${{ parameters.deploymentNum }}'
+      pool:
+        vmImage: ${{ parameters.vmImage }}
+      environment: ${{ parameters.environment }}_run_databricks
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+            - task: AzurePowerShell@5
+              inputs:
+                azureSubscription: '${{ parameters.azureSubName }}'
+                ScriptType: 'InlineScript'
+                Inline: |
+                  echo "RunTest: ${{ parameters.RunTest }}"
+                  echo "environment: ${{ parameters.environment }}"
+                  echo "deploymentNum: ${{ parameters.deploymentNum }}"
+                  echo "vmImage: ${{ parameters.vmImage }}"
+                  echo "blank_data_warehouse: ${{ parameters.blank_data_warehouse }}"
+                  echo "============================================"
+                  echo "Run the databricks processing"
+                azurePowerShellVersion: 'LatestVersion'
