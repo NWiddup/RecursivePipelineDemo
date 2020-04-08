@@ -3,7 +3,11 @@
 # Add steps that build, run tests, deploy, and more:
 # https://aka.ms/yaml
 
-trigger: none
+# no trigger on this 'manual' template. The trigger will be a schedule in the scheduled-template.yml
+# trigger: none
+
+# no build name as we dynamically set it during the first step based on the isScheduledRun Parameter value
+# name: $(Date:yyyyMMdd).$(BuildID)
 
 parameters:
   - name: Repo1_ADF_BuildArtifacts_TagNameOrBuildNumber
@@ -45,6 +49,10 @@ parameters:
     default: 'Azure Subscription (123)' #replace with your service connection
     values:
       - 'Azure Subscription (123)'
+  - name: isScheduledRun
+    displayName: 'Is isScheduled Run?'
+    type: boolean
+    default: false
 
 # from: https://docs.microsoft.com/en-us/azure/devops/pipelines/process/expressions?view=azure-devops
 # Two examples of expressions used to define variables
@@ -52,17 +60,20 @@ parameters:
 # The second one, b, is evaluated at run time. 
 # Note the syntax ${{}} for parse time and $[] for runtime expressions.
 variables:
-  - name: BuildName
-    value: $(Date:yyyyMMdd)_$(BuildID)
-    readonly: true
   - name: vmImage
     value: 'windows-latest'
   - name: a
     value: ${{ true }} # case insensitive, so true, True or TRUE all work. this is evaluated at parse time
   - name: b
     value: $[counter(variables['build.reason'], 0)] # this would evaluate any <expression> at runtime
-  
-name: $(BuildName)
+  - name: version.MajorMinor
+    value: '1.2' # Manually adjust the version number as needed for semantic versioning. Revision is auto-incremented.
+  - name: version.Revision
+    value: $[counter(variables['version.MajorMinor'], 0)] # this will count up each time it is run, up until you change the MajorMinor version number
+  - name: versionNumber
+    value: '$(version.MajorMinor).$(version.Revision)' # you could use the version number if you wanted, instead of $pBuildName in the first job step below
+  - name: vBuildsToday
+    value: $[counter(format('{0:yyyyMMdd}', pipeline.startTime), 0)] #will restart the counter at 0 each day
 
 stages:
   # this step will download build artifacts from a specific repository & branch, looking for latest for a specific tag. This could be used to pull the build artifacts from across different repositories.
@@ -88,6 +99,28 @@ stages:
         runOnce:
           deploy:
             steps:
+              - task: PowerShell@2
+                displayName: 'Set the Build Name variable value then assign to the build'
+                inputs:
+                  targetType: 'inline'
+                  script: |
+                    Write-Host 'isScheduledRun: "${{ parameters['isScheduledRun'] }}"'
+                    if ('${{ parameters['isScheduledRun'] }}' -eq 'False') {
+                      [string] $pDateTime = (Get-Date -Format 'yyyyMMddTHHmm')
+                      [string] $pBuildID = '$(Build.BuildId)'
+                      [string] $pBuildsToday = '$(vBuildsToday)'
+                      [string] $pBuildName = "Manual_Build_$($pDateTime)__BuildID_$($pBuildID)__BuildsToday_$($pBuildsToday)__CommitMsg--"
+                      Write-Host "'$pDateTime'"
+                      Write-Host "'$pBuildID'"
+                      Write-Host "'$pBuildsToday'"
+                      Write-Host "Setting the name of the build to '$pBuildName'."
+                      Write-Host "##vso[build.updatebuildnumber]$pBuildName"
+                    } else {
+                        Write-Host "Build Name does not need to be changed"
+                    }
+                  # from here https://docs.microsoft.com/en-us/azure/devops/pipelines/scripts/logging-commands?view=azure-devops&tabs=bash#updatebuildnumber-override-the-automatically-generated-build-number
+                  # can also this use this code to add a build tag:
+                  # ##vso[build.addbuildtag]build tag
               - task: AzureKeyVault@1
                 inputs:
                   azureSubscription: '${{ parameters.azureSubDetails }}'
