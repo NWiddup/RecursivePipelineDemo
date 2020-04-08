@@ -1,0 +1,27 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+schedules:
+    - cron: "0,30 7-19 * * *"
+      displayName: "At minute 0, 30 past every hour from 07 through 19."
+      branches:
+        include:
+          - master
+      always: "true"
+  
+  name: 'Scheduled_Build_$(Date:yyyyMMdd_hhmm)' # build run name
+  
+  extends:
+    template: parent-template.yml
+    parameters:
+        Repo1_ADF_BuildArtifacts_TagNameOrBuildNumber: Repo1_ADFPublish3
+        Repo2_IAC_BuildArtifacts_TagNameOrBuildNumber: Repo2_IACARMRepo_Publish1
+        RunTest1: 'false'
+        RunTest2: true
+        RunTest3: false
+        blank_data_warehouse: 'no'
+        # azureSubDetails: 'Azure Subscription (123)' #replace with your service connection
+        isScheduledRun: true
+  
