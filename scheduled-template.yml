@@ -4,12 +4,12 @@
 # https://aka.ms/yaml
 
 schedules:
-    - cron: "0,30 7-19 * * *"
-      displayName: "At minute 0, 30 past every hour from 07 through 19. This time is UTC for Azure DevOps"
-      branches:
-        include:
-          - master
-      always: "true"
+  - cron: "0,30 7-19 * * *"
+    displayName: "At minute 0, 30 past every hour from 07 through 19. This time is UTC for Azure DevOps"
+    branches:
+      include:
+        - master
+    always: "true"
   
   name: 'Scheduled_Build_$(Date:yyyyMMdd_hhmm)' # build run name
   
